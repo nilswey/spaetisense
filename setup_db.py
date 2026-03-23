@@ -30,6 +30,25 @@ SCHEMA = """
 
     CREATE INDEX IF NOT EXISTS idx_sensor_time
         ON measurements (sensor_id, measured_at DESC);
+
+    CREATE TABLE IF NOT EXISTS averages (
+        id              SERIAL PRIMARY KEY,
+        sensor_id       TEXT NOT NULL,
+        phenomenon      TEXT NOT NULL,
+        unit            TEXT,
+        avg_value       DOUBLE PRECISION NOT NULL,
+        reading_count   INTEGER NOT NULL,
+        window_minutes  INTEGER NOT NULL DEFAULT 5,
+        calculated_at   TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE (sensor_id, phenomenon, window_minutes)  -- one row per sensor+phenomenon
+    );
+    
+    CREATE TABLE IF NOT EXISTS prices (
+    id              SERIAL PRIMARY KEY,
+    index_value     DOUBLE PRECISION NOT NULL,
+    price           DOUBLE PRECISION NOT NULL,
+    calculated_at   TIMESTAMPTZ DEFAULT NOW()
+);
 """
 # ──────────────────────────────────────────────
 
