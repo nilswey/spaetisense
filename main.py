@@ -30,10 +30,10 @@ DB_PASSWORD = os.getenv("DB_ADMIN_PASSWORD") or None
 
 
 # ── price config ─────────────────────────────────────
-BASE_PRICE  = 2.50   # € minimum price
-MAX_MARKUP  = 1.50   # € added at index = 1.0
-SMOOTHING   = 0.7    # 0 = no smoothing, 1 = never changes
-CURVE       = 1.0    # 1.0 = linear, 2.0 = quadratic, 0.5 = sqrt
+BASE_PRICE  = 2.0   # € minimum price
+MAX_MARKUP  = 1.0   # € added at index = 1.0
+SMOOTHING   = 0.3    # 0 = no smoothing, 1 = never changes
+CURVE       = 1.5    # 1.0 = linear, 2.0 = quadratic, 0.5 = sqrt
 
 # Min/max for normalization — tune to your local climate
 PHENOMENA_CONFIG = {
@@ -41,6 +41,23 @@ PHENOMENA_CONFIG = {
     "rel. Luftfeuchte": {"min": 20, "max": 90, "weight": 0.3},
     "PM2.5":      {"min": 0,  "max": 50, "weight": 0.2},
 }
+
+""" Sample Config for final sensor Data
+PHENOMENA_CONFIG = {
+    "Temperatur": {"min": 25,  "max": 40, "weight": 0.2},
+    "UV-Index": {"min": 5, "max": 11, "weight": 0.2},
+    "Lautstärke": {"min": 50,  "max": 120, "weight": 0.3},
+    "PersAnz": {"min": 8, "max": 20, "weight": 0.3},
+},
+
+# Temperatur -> am besten Optimum zwischen 18-25 Grad alles darüber index punishment
+# UV Index in deutschland sommer typischerweise 5-8 -> alles unter 5 "normal" keine bewertung und dann index punishment mit steigendem UV https://de.wikipedia.org/wiki/UV-Index
+# Lautstärke -> 50 normales gespräch ab 120 DB Schmerzen
+# Personen Anzahl -> 5-10 "normal" ab dann index punishment
+
+
+"""
+
 # ────────────────────────────────────────────────────
 
 # ────────────────────────────────────────────────────
@@ -93,10 +110,30 @@ def poll_once():
     sensors  = data.get("sensors", [])
     new_rows = 0
 
+    # Parse location before opening DB connection
+    loc = data.get("currentLocation", {}).get("coordinates", [])
+    lat, lon = None, None
+    if len(loc) >= 2:
+        lon, lat = loc[0], loc[1]   # GeoJSON is [lon, lat]
+
     try:
         conn = get_db_connection()
         with conn:
             with conn.cursor() as cur:
+
+                # Upsert box location
+                if lat is not None and lon is not None:
+                    cur.execute("""
+                        INSERT INTO boxes (box_id, box_name, latitude, longitude, updated_at)
+                        VALUES (%s, %s, %s, %s, NOW())
+                        ON CONFLICT (box_id) DO UPDATE SET
+                            box_name   = EXCLUDED.box_name,
+                            latitude   = EXCLUDED.latitude,
+                            longitude  = EXCLUDED.longitude,
+                            updated_at = NOW()
+                    """, (box_id, data.get("name"), lat, lon))
+
+                # Insert measurements
                 for sensor in sensors:
                     last = sensor.get("lastMeasurement")
                     if not last:

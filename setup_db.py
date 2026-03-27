@@ -49,6 +49,14 @@ SCHEMA = """
     price           DOUBLE PRECISION NOT NULL,
     calculated_at   TIMESTAMPTZ DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS boxes (
+    box_id      TEXT PRIMARY KEY,
+    box_name    TEXT,
+    latitude    DOUBLE PRECISION,
+    longitude   DOUBLE PRECISION,
+    updated_at  TIMESTAMPTZ DEFAULT NOW()
+);
 """
 # ──────────────────────────────────────────────
 

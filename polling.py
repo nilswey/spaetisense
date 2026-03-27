@@ -72,14 +72,34 @@ def poll_once():
     if not data:
         return
 
-    box_id  = data.get("_id", BOX_ID)
-    sensors = data.get("sensors", [])
+    box_id   = data.get("_id", BOX_ID)
+    sensors  = data.get("sensors", [])
     new_rows = 0
+
+    # Parse location before opening DB connection
+    loc = data.get("currentLocation", {}).get("coordinates", [])
+    lat, lon = None, None
+    if len(loc) >= 2:
+        lon, lat = loc[0], loc[1]   # GeoJSON is [lon, lat]
 
     try:
         conn = get_db_connection()
         with conn:
             with conn.cursor() as cur:
+
+                # Upsert box location
+                if lat is not None and lon is not None:
+                    cur.execute("""
+                        INSERT INTO boxes (box_id, box_name, latitude, longitude, updated_at)
+                        VALUES (%s, %s, %s, %s, NOW())
+                        ON CONFLICT (box_id) DO UPDATE SET
+                            box_name   = EXCLUDED.box_name,
+                            latitude   = EXCLUDED.latitude,
+                            longitude  = EXCLUDED.longitude,
+                            updated_at = NOW()
+                    """, (box_id, data.get("name"), lat, lon))
+
+                # Insert measurements
                 for sensor in sensors:
                     last = sensor.get("lastMeasurement")
                     if not last:
@@ -87,30 +107,27 @@ def poll_once():
 
                     raw_value = last.get("value")
                     raw_time  = last.get("createdAt")
-
                     if raw_value is None or raw_time is None:
                         continue
 
                     try:
-                        from datetime import datetime
                         measured_at = datetime.fromisoformat(raw_time.replace("Z", "+00:00"))
                     except ValueError:
-                        log.warning(f"Could not parse timestamp: {raw_time}")
+                        log.warning(f"[poller] Could not parse timestamp: {raw_time}")
                         continue
 
-                    inserted = insert_measurement(cur, box_id, sensor, raw_value, measured_at)
-                    if inserted:
+                    if insert_measurement(cur, box_id, sensor, raw_value, measured_at):
                         new_rows += 1
                         log.info(
-                            f"  ✓ {sensor.get('title')} ({sensor.get('unit')}) "
+                            f"  [poller] ✓ {sensor.get('title')} ({sensor.get('unit')}) "
                             f"= {raw_value} @ {measured_at}"
                         )
 
         conn.close()
-        log.info(f"Poll complete — {new_rows} new row(s) inserted across {len(sensors)} sensor(s).")
+        log.info(f"[poller] Poll complete — {new_rows} new row(s) across {len(sensors)} sensor(s).")
 
     except psycopg2.Error as e:
-        log.error(f"Database error: {e}")
+        log.error(f"[poller] Database error: {e}")
 
 
 def main():
