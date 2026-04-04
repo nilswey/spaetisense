@@ -43,12 +43,13 @@ SCHEMA = """
         UNIQUE (sensor_id, phenomenon, window_minutes)  -- one row per sensor+phenomenon
     );
     
-    CREATE TABLE IF NOT EXISTS prices (
+CREATE TABLE IF NOT EXISTS prices (
     id              SERIAL PRIMARY KEY,
+    box_id          TEXT NOT NULL,
     index_value     DOUBLE PRECISION NOT NULL,
     price           DOUBLE PRECISION NOT NULL,
     calculated_at   TIMESTAMPTZ DEFAULT NOW()
-);
+    );
 
 CREATE TABLE IF NOT EXISTS boxes (
     box_id      TEXT PRIMARY KEY,
@@ -117,7 +118,7 @@ def main():
     print("\n=== Setup complete! ===\n")
     print(f"  Database : {DB_NAME}")
     print(f"  Host     : {DB_HOST}:{DB_PORT}")
-    print(f"\nYou can now run: python poller.py\n")
+    print(f"\nYou can now run: python main.py\n")
 
 
 if __name__ == "__main__":

@@ -80,21 +80,39 @@ def load_averages(box_id: str):
 
 
 @st.cache_data(ttl=30)
-def load_latest_price():
+def load_latest_price(box_id: str):
     conn = get_conn()
     with conn:
         with conn.cursor() as cur:
             cur.execute("""
-                SELECT price, index_value, calculated_at
+                SELECT price, calculated_at
                 FROM prices
+                WHERE box_id = %s
                 ORDER BY calculated_at DESC
                 LIMIT 1
-            """)
+            """, (box_id,))
             row = cur.fetchone()
     conn.close()
     if row:
-        return {"price": row[0], "index": row[1], "calculated_at": row[2]}
+        return {"price": row[0], "calculated_at": row[1]}
     return None
+
+
+@st.cache_data(ttl=30)
+def load_price_history(box_id: str, limit: int = 10):
+    conn = get_conn()
+    with conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT price, calculated_at
+                FROM prices
+                WHERE box_id = %s
+                ORDER BY calculated_at DESC
+                LIMIT %s
+            """, (box_id, limit))
+            rows = cur.fetchall()
+    conn.close()
+    return [{"price": r[0], "calculated_at": r[1]} for r in reversed(rows)]
 
 
 @st.cache_data(ttl=30)
@@ -121,20 +139,6 @@ def load_recent_measurements(box_id: str, limit: int = 10):
         for r in rows
     ]
 
-@st.cache_data(ttl=30)
-def load_price_history(limit: int = 10):
-    conn = get_conn()
-    with conn:
-        with conn.cursor() as cur:
-            cur.execute("""
-                SELECT price, calculated_at
-                FROM prices
-                ORDER BY calculated_at DESC
-                LIMIT %s
-            """, (limit,))
-            rows = cur.fetchall()
-    conn.close()
-    return [{"price": r[0], "calculated_at": r[1]} for r in reversed(rows)]
 
 # ── Map ──────────────────────────────────────────────
 
@@ -214,14 +218,14 @@ with col_detail:
     st.subheader(box_info["name"] if box_info and box_info["name"] else box_id)
 
     # ── Current price ────────────────────────────────
-    price_data = load_latest_price()
+    price_data = load_latest_price(box_id)
     if price_data:
         st.markdown("#### 🍺 Current beer price")
         st.metric("Price", f"€ {price_data['price']:.2f}")
         st.caption(f"Last calculated: {price_data['calculated_at'].strftime('%H:%M:%S')}")
 
         # Line chart
-        history = load_price_history()
+        history = load_price_history(box_id=box_id, limit=10)
         if len(history) > 1:
             import pandas as pd
             df = pd.DataFrame(history)
