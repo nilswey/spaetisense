@@ -28,6 +28,7 @@ DB_NAME     = os.getenv("DB_NAME", "sensordata")
 DB_ADMIN    = os.getenv("DB_ADMIN_USER", "postgres")
 DB_PASSWORD = os.getenv("DB_ADMIN_PASSWORD") or None
 
+# Edits for the price calculation
 
 # ── price config ─────────────────────────────────────
 BASE_PRICE  = 2.0   # € minimum price
@@ -35,7 +36,8 @@ MAX_MARKUP  = 1.0   # € added at index = 1.0
 SMOOTHING   = 0.3    # 0 = no smoothing, 1 = never changes
 CURVE       = 1.5    # 1.0 = linear, 2.0 = quadratic, 0.5 = sqrt
 
-# Min/max for normalization — tune to your local climate
+# Min/max for normalization for index - values can be adjusted accordingly
+
 PHENOMENA_CONFIG = {
     "Temperatur": {"min": 0,  "max": 35, "weight": 0.5},
     "rel. Luftfeuchte": {"min": 20, "max": 90, "weight": 0.3},
@@ -58,9 +60,7 @@ PHENOMENA_CONFIG = {
 
 """
 
-# ────────────────────────────────────────────────────
-
-# ────────────────────────────────────────────────────
+# DB connection
 
 
 def get_db_connection():
@@ -82,6 +82,7 @@ def fetch_box_data():
         log.error(f"[poller] API request failed: {e}")
         return None
 
+# Inserts the data into SQL
 
 def insert_measurement(cur, box_id, sensor, value_str, measured_at):
     try:

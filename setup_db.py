@@ -13,8 +13,9 @@ DB_NAME  = os.getenv("DB_NAME", "sensordata")
 DB_ADMIN = os.getenv("DB_ADMIN_USER", "postgres")
 
 # ──────────────────────────────────────────────
-# Define your schema here — edit freely
+# Define Schema
 # ──────────────────────────────────────────────
+# Schemas for mesurements table - rolling average table - and price table with index
 SCHEMA = """
     CREATE TABLE IF NOT EXISTS measurements (
         id              SERIAL PRIMARY KEY,
@@ -27,7 +28,6 @@ SCHEMA = """
         inserted_at     TIMESTAMPTZ DEFAULT NOW(),
         UNIQUE (sensor_id, measured_at)
     );
-
     CREATE INDEX IF NOT EXISTS idx_sensor_time
         ON measurements (sensor_id, measured_at DESC);
 
@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS boxes (
 # ──────────────────────────────────────────────
 
 
-DB_PASSWORD = os.getenv("DB_ADMIN_PASSWORD") or None  # None = let Postgres decide
+DB_PASSWORD = os.getenv("DB_ADMIN_PASSWORD") or None
 
 def get_conn(dbname="postgres"):
     return psycopg2.connect(

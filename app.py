@@ -164,8 +164,7 @@ def build_map(boxes: list, selected_box_id: str | None):
 
 # ── UI ───────────────────────────────────────────────
 
-st.image("logo_clip"
-         ".png", width=600)
+st.image("logo_adj.png", width=450)
 st.caption("Live sensor readings, 5-minute averages and current index price.")
 
 boxes = load_boxes()
@@ -226,7 +225,7 @@ with col_detail:
         if len(history) > 1:
             import pandas as pd
             df = pd.DataFrame(history)
-            df["calculated_at"] = pd.to_datetime(df["calculated_at"])
+            df["calculated_at"] = pd.to_datetime(df["calculated_at"], utc=True)
             st.line_chart(
                 df.set_index("calculated_at")["price"],
                 color="#1D9E75",
