@@ -57,10 +57,8 @@ PHENOMENA_CONFIG = {
     "Temperature": {"min": 20,  "max": 40, "weight": 0.1},
     "UV": {"min": 5, "max": 11, "weight": 0.1},
     "Sound Level": {"min": 50,  "max": 120, "weight": 0.4},
-    "People": {"min": 1, "max": 20, "weight": 0.4},
+    "People": {"min": 0, "max": 20, "weight": 0.4},
 },
-
-nt
 
 
 log.info(f"[config] BOX_IDS loaded: {BOX_IDS}")
@@ -79,7 +77,7 @@ def get_db_connection():
 
 def fetch_box_data(box_id: str):
     try:
-        resp = requests.get(f"https://api.opensensemap.org/boxes/{box_id}", timeout=10)
+        resp = requests.get(f"https://api.staging.opensensemap.org/boxes/{box_id}", timeout=10)
         resp.raise_for_status()
         return resp.json()
     except requests.RequestException as e:
@@ -89,10 +87,15 @@ def fetch_box_data(box_id: str):
 # Inserts the data into SQL
 
 def insert_measurement(cur, box_id, sensor, value_str, measured_at):
+    sensor_id = sensor.get("_id") or sensor.get("id")
+    if not sensor_id:
+        log.warning(f"[poller] Skipping sensor with no id: {sensor}")
+        return False
+
     try:
         value = float(value_str)
     except (TypeError, ValueError):
-        log.warning(f"[poller] Skipping non-numeric value '{value_str}' for sensor {sensor['_id']}")
+        log.warning(f"[poller] Skipping non-numeric value '{value_str}' for sensor {sensor_id}")
         return False
 
     cur.execute(
@@ -101,7 +104,7 @@ def insert_measurement(cur, box_id, sensor, value_str, measured_at):
         VALUES (%s, %s, %s, %s, %s, %s)
         ON CONFLICT (sensor_id, measured_at) DO NOTHING
         """,
-        (box_id, sensor["_id"], sensor.get("title"), sensor.get("unit"), value, measured_at)
+        (box_id, sensor_id, sensor.get("title"), sensor.get("unit"), value, measured_at)
     )
     return cur.rowcount > 0
 
@@ -116,11 +119,12 @@ def poll_once():
         sensors       = data.get("sensors", [])
         new_rows      = 0
 
-        loc = data.get("currentLocation", {}).get("coordinates", [])
-        lat, lon = None, None
-        if len(loc) >= 2:
-            lon, lat = loc[0], loc[1]
+        lat = data.get("latitude") or data.get("currentLocation", {}).get("coordinates", [None, None, None])[1]
+        lon = data.get("longitude") or data.get("currentLocation", {}).get("coordinates", [None, None, None])[0]
 
+        log.info(f"[poller] lat={lat} lon={lon} box_id={actual_box_id} name={data.get('name')}")
+        log.info(
+            f"[poller] full location field: {data.get('currentLocation')} | loc field: {data.get('loc')} | location: {data.get('location')}")
         try:
             conn = get_db_connection()
             with conn:
