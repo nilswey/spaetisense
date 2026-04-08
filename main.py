@@ -6,6 +6,10 @@ import requests
 import psycopg2
 from datetime import datetime
 from dotenv import load_dotenv
+import math
+
+# To-Do: potentiell averages table ändern sodass jeder average gespeichert wird und nicht erssetzt wird
+
 
 load_dotenv()
 
@@ -32,33 +36,33 @@ DB_PASSWORD = os.getenv("DB_ADMIN_PASSWORD") or None
 
 # ── price config ─────────────────────────────────────
 BASE_PRICE  = 2.0   # € minimum price
-MAX_MARKUP  = 1.0   # € added at index = 1.0
+MAX_MARKUP  = 1.0   # adds 1 euro for maximum price change
 SMOOTHING   = 0.3    # 0 = no smoothing, 1 = never changes
-CURVE       = 1.5    # 1.0 = linear, 2.0 = quadratic, 0.5 = sqrt
+CURVE       = 1.0    # 1.0 = linear, 2.0 = quadratic, 0.5 = sqrt
 
 # Min/max for normalization for index - values can be adjusted accordingly
 
-PHENOMENA_CONFIG = {
+"""PHENOMENA_CONFIG = {
     "Temperatur": {"min": 0,  "max": 35, "weight": 0.5},
     "rel. Luftfeuchte": {"min": 20, "max": 90, "weight": 0.3},
     "PM2.5":      {"min": 0,  "max": 50, "weight": 0.2},
-}
-
-""" Sample Config for final sensor Data
-PHENOMENA_CONFIG = {
-    "Temperatur": {"min": 25,  "max": 40, "weight": 0.2},
-    "UV-Index": {"min": 5, "max": 11, "weight": 0.2},
-    "Lautstärke": {"min": 50,  "max": 120, "weight": 0.3},
-    "PersAnz": {"min": 8, "max": 20, "weight": 0.3},
-},
-
+}"""
 # Temperatur -> am besten Optimum zwischen 18-25 Grad alles darüber index punishment
 # UV Index in deutschland sommer typischerweise 5-8 -> alles unter 5 "normal" keine bewertung und dann index punishment mit steigendem UV https://de.wikipedia.org/wiki/UV-Index
 # Lautstärke -> 50 normales gespräch ab 120 DB Schmerzen
 # Personen Anzahl -> 5-10 "normal" ab dann index punishment
 
+# Sample Config for final sensor Data
+PHENOMENA_CONFIG = {
+    "Temperature": {"min": 20,  "max": 40, "weight": 0.1},
+    "UV": {"min": 5, "max": 11, "weight": 0.1},
+    "Sound Level": {"min": 50,  "max": 120, "weight": 0.4},
+    "People": {"min": 1, "max": 20, "weight": 0.4},
+},
 
-"""
+nt
+
+
 log.info(f"[config] BOX_IDS loaded: {BOX_IDS}")
 log.info(f"[config] .env loaded from: {os.path.abspath('.env')}")
 # DB connection
@@ -196,6 +200,11 @@ def calculate_and_store_averages():
 
             with conn.cursor() as cur:
                 for sensor_id, phenomenon, unit, avg_value, reading_count in rows:
+
+                    # round count of person up
+                    if phenomenon == "People":
+                        avg_value = math.ceil(avg_value)
+
                     cur.execute("""
                         INSERT INTO averages
                             (sensor_id, phenomenon, unit, avg_value, reading_count, window_minutes, calculated_at)
