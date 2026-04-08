@@ -13,7 +13,7 @@ Spätisense is a real-time sensor monitoring and analytics platform that integra
 ### 1. Clone the repository and navigate to the project directory
 
 ```bash
-cd C:\Skripte\Spaetisense
+cd path/to/project
 ```
 
 ### 2. Install Python dependencies
@@ -22,11 +22,6 @@ cd C:\Skripte\Spaetisense
 pip install -r requirements.txt
 ```
 
-If you don't have a `requirements.txt` yet, install the required packages manually:
-
-```bash
-pip install psycopg2-binary streamlit folium streamlit-folium python-dotenv requests pandas
-```
 
 ### 3. Configure environment variables
 
@@ -47,16 +42,16 @@ AVERAGE_WINDOW_MINUTES=5
 
 ### 4. Set up the database schema
 
+Start PGAdmin 
+
 Run the database setup script to create tables and indices:
 
 ```bash
 python setup_db.py
 ```
 
-This will:
-- Create the `sensordata` database (if it doesn't exist)
-- Create the following tables: `measurements`, `averages`, `prices`, and `boxes`
-- Create necessary indices for performance
+This will create the necessary tables for storing sensor data, rolling averages, and price index history in your PostgreSQL database.
+
 
 ### 5. Start the background services
 
@@ -93,7 +88,7 @@ The dashboard will be available at `http://localhost:8501` and will display:
 - **`main.py`** – Background service (poller, averager, indexer)
 - **`setup_db.py`** – Database initialization and schema setup
 - **`.env`** – Configuration file (database credentials, API settings)
-- **`logo_*.png`** – Logo assets for the dashboard
+- **`logo_adj.png`** – Logo assets for the dashboard
 
 ## Configuration
 
