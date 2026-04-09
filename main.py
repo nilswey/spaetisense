@@ -8,8 +8,6 @@ from datetime import datetime
 from dotenv import load_dotenv
 import math
 
-# To-Do: potentiell averages table ändern sodass jeder average gespeichert wird und nicht erssetzt wird
-
 
 load_dotenv()
 
@@ -19,7 +17,7 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
-# ── Config ──────────────────────────────────────────
+# ----- Config ------------
 
 BOX_IDS = [b.strip() for b in os.getenv("OPENSENSEMAP_BOX_IDS", "").split(",") if b.strip()]
 POLL_INTERVAL    = int(os.getenv("POLL_INTERVAL_SECONDS", 60))
@@ -32,37 +30,50 @@ DB_NAME     = os.getenv("DB_NAME", "sensordata")
 DB_ADMIN    = os.getenv("DB_ADMIN_USER", "postgres")
 DB_PASSWORD = os.getenv("DB_ADMIN_PASSWORD") or None
 
-# Edits for the price calculation
+# --------Edits for the price calculation----
 
-# ── price config ─────────────────────────────────────
 BASE_PRICE  = 2.0   # € minimum price
-MAX_MARKUP  = 1.0   # adds 1 euro for maximum price change
-SMOOTHING   = 0.3    # 0 = no smoothing, 1 = never changes
-CURVE       = 1.0    # 1.0 = linear, 2.0 = quadratic, 0.5 = sqrt
+MAX_MARKUP  = 1.0   # Max price markup achievable
+SMOOTHING   = 0.3    # smoothing to avoid abrupt index changes: 0 = no smoothing, 1 = never changes
+CURVE       = 1.0    # multiplication curve, that regulates index growth: 1 = linear, 2 = quadratic
 
 # Min/max for normalization for index - values can be adjusted accordingly
 
-"""PHENOMENA_CONFIG = {
-    "Temperatur": {"min": 0,  "max": 35, "weight": 0.5},
-    "rel. Luftfeuchte": {"min": 20, "max": 90, "weight": 0.3},
-    "PM2.5":      {"min": 0,  "max": 50, "weight": 0.2},
-}"""
-# Temperatur -> am besten Optimum zwischen 18-25 Grad alles darüber index punishment
-# UV Index in deutschland sommer typischerweise 5-8 -> alles unter 5 "normal" keine bewertung und dann index punishment mit steigendem UV https://de.wikipedia.org/wiki/UV-Index
+# Value explenations
+# Temperatur -> optimal till 20 - 25 degrees, then index punishment with rising temperature
+# UV Index in germany typically 5-8 -> alles unter 5 "normal" keine bewertung und dann index punishment mit steigendem UV https://de.wikipedia.org/wiki/UV-Index
 # Lautstärke -> 50 normales gespräch ab 120 DB Schmerzen
 # Personen Anzahl -> 5-10 "normal" ab dann index punishment
 
-# Sample Config for final sensor Data
+#  Config for final sensor Data, adjustable
 PHENOMENA_CONFIG = {
     "Temperature": {"min": 20,  "max": 40, "weight": 0.1},
     "UV": {"min": 5, "max": 11, "weight": 0.1},
     "Sound Level": {"min": 50,  "max": 120, "weight": 0.4},
-    "People": {"min": 0, "max": 20, "weight": 0.4},
-},
+    "People": {"min": 0, "max": 15, "weight": 0.4},
+}
 
 
 log.info(f"[config] BOX_IDS loaded: {BOX_IDS}")
-log.info(f"[config] .env loaded from: {os.path.abspath('.env')}")
+log.info(f"[config] .env loaded")
+
+# UV values to UV index adjusted from https://www.brunweb.de/veml6070-uv-sensor/
+
+def convert_uv_to_index(raw_value: float) -> float:
+
+    if raw_value <= 560:
+        return 1.0    # UV 0-2
+    elif raw_value <= 1120:
+        return 5.0    # UV 3-5 till normal german UV index
+    elif raw_value <= 1494:
+        return 6.0    # UV 6-7
+    elif raw_value <= 2054:
+        return 9.0    # UV 8-10
+    elif raw_value <= 9999:
+        return 11.0   # UV >10
+    else:
+        return 0.0    # fallback
+
 # DB connection
 
 def get_db_connection():
@@ -77,6 +88,7 @@ def get_db_connection():
 
 def fetch_box_data(box_id: str):
     try:
+        # staging api
         resp = requests.get(f"https://api.staging.opensensemap.org/boxes/{box_id}", timeout=10)
         resp.raise_for_status()
         return resp.json()
@@ -84,7 +96,7 @@ def fetch_box_data(box_id: str):
         log.error(f"[poller] API request failed for {box_id}: {e}")
         return None
 
-# Inserts the data into SQL
+# Inserts the data intoDB
 
 def insert_measurement(cur, box_id, sensor, value_str, measured_at):
     sensor_id = sensor.get("_id") or sensor.get("id")
@@ -97,6 +109,10 @@ def insert_measurement(cur, box_id, sensor, value_str, measured_at):
     except (TypeError, ValueError):
         log.warning(f"[poller] Skipping non-numeric value '{value_str}' for sensor {sensor_id}")
         return False
+
+    # Convert raw UV reading to UV index
+    if sensor.get("title") == "UV":
+        value = convert_uv_to_index(value)
 
     cur.execute(
         """
@@ -178,9 +194,10 @@ def run_poller():
         time.sleep(POLL_INTERVAL)
 
 
-# ── Averager ─────────────────────────────────────────
+# ---- Averager -------------
 
 def calculate_and_store_averages():
+
     updated = 0
 
     for box_id in BOX_IDS:
@@ -205,7 +222,7 @@ def calculate_and_store_averages():
             with conn.cursor() as cur:
                 for sensor_id, phenomenon, unit, avg_value, reading_count in rows:
 
-                    # round count of person up
+                    # round count of person up to avoid half perosns, because model is leaning to underestimation
                     if phenomenon == "People":
                         avg_value = math.ceil(avg_value)
 
@@ -250,7 +267,8 @@ def calculate_index(averages: list[dict]) -> float:
             continue
 
         cfg = PHENOMENA_CONFIG[phenomenon]
-        # Normalize to 0–1, clamp to valid range
+
+        # Normalize to 0–1 bassed on config
         normalized = (row["avg_value"] - cfg["min"]) / (cfg["max"] - cfg["min"])
         normalized = max(0.0, min(1.0, normalized))
 
@@ -261,7 +279,7 @@ def calculate_index(averages: list[dict]) -> float:
         return 0.0
 
     index = weighted_sum / total_weight
-    return round(index ** CURVE, 4)   # apply curve shape
+    return round(index ** CURVE, 4)   # apply curve, current linear
 
 
 def smooth_index(new_index: float, conn, box_id: str) -> float:
@@ -332,7 +350,7 @@ def run_indexer():
             log.error(f"[indexer] Database error: {e}")
         time.sleep(AVERAGE_INTERVAL)
 
-# ── Entry point ──────────────────────────────────────
+# ---- Main ---- Run Threads
 
 def main():
     threads = [
@@ -343,7 +361,7 @@ def main():
     for t in threads:
         t.start()
 
-    log.info("Both poller and averager and indexer running. Press Ctrl+C to stop.\n")
+    log.info("poller, averager and indexer running\n")
 
     # Keep main thread alive so Ctrl+C works
     try:

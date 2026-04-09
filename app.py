@@ -4,7 +4,6 @@ import streamlit as st
 import folium
 from streamlit_folium import st_folium
 from dotenv import load_dotenv
-import time
 
 load_dotenv()
 
@@ -16,7 +15,6 @@ DB_PASSWORD = os.getenv("DB_ADMIN_PASSWORD") or None
 
 st.set_page_config(
     page_title="Sensor Dashboard",
-    page_icon="🌡️",
     layout="wide"
 )
 
