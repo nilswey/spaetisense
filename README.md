@@ -1,5 +1,8 @@
 # Spätisense
 
+Click here to explore the data that has already been collected:
+https://staging.opensensemap.org/explore/vhrqgsr7wo7nmzjx69o0xlqp
+
 SpaetiSense is a real-time environmental monitoring and dynamic Beer pricing
 system that collects sensor data from senseBox devices registered on the
 openSenseMap platform, stores and aggregates the data in a relational database, and
